@@ -13,7 +13,7 @@ import settings
 import six
 
 from scipy import misc
-from six.moves import cPickle
+import pickle
 from pythonapi import anno_tools, common_tools
 
 
@@ -48,7 +48,7 @@ def crop(image, bbox):
 
 def main():
     assert six.PY3
-
+    
     with open(settings.TRAIN) as f:
         lines = f.read().splitlines()
     with open(settings.VAL) as f:
@@ -68,9 +68,14 @@ def main():
             train[i].append([cropped, char['text']])
     common_tools.multithreaded(load_train, range(len(lines)), num_thread=8)
     train = common_tools.reduce_sum(train)
+    max_bytes = 2**31 - 1
+    train_out = pickle.dumps(train, protocol = pickle.HIGHEST_PROTOCOL)
     with open(settings.TRAINVAL_PICKLE, 'wb') as f:
-        cPickle.dump(train, f)
-    train = None  # release memory
+        for idx in range(0, len(train_out), max_bytes):
+            f.write(train_out[idx:idx+max_bytes])
+    train = None # release memory
+    train_out = None
+    
 
     with open(settings.TEST_CLASSIFICATION) as f:
         lines = f.read().splitlines()
@@ -81,15 +86,19 @@ def main():
             print('test', i, '/', len(lines))
         anno = json.loads(lines[i].strip())
         image = misc.imread(os.path.join(settings.TEST_IMAGE_DIR, anno['file_name']))
-        assert image.shape == (anno['height'], anno['width'], 3)
+        #assert image.shape == (anno['height'], anno['width'], 3)
         for char in anno['proposals']:
             cropped = crop(image, char['adjusted_bbox'])
             test[i].append([cropped, None])
     common_tools.multithreaded(load_test, range(len(lines)), num_thread=8)
     test = common_tools.reduce_sum(test)
+    max_bytes = 2**31 - 1
+    test_out = pickle.dumps(test, protocol = pickle.HIGHEST_PROTOCOL)
     with open(settings.TEST_PICKLE, 'wb') as f:
-        cPickle.dump(test, f)
-    test = None
+        for idx in range(0, len(test_out), max_bytes):
+            f.write(test_out[idx:idx+max_bytes])
+    test = None  # release memory
+    test_out = None
 
 
 if __name__ == '__main__':
