@@ -26,7 +26,7 @@ cfg_common = {
     'learning_rate_decay_factor': '0.1',
     'decay_steps': '40000',
     'max_number_of_steps': '100000',
-    'per_process_gpu_memory_fraction': '1.0',
+    'per_process_gpu_memory_fraction': '0.95',
     'save_summaries_secs': '120',
     'save_interval_secs': '1200',
 }
@@ -60,6 +60,11 @@ cfgs = [
     {
         'model_name': 'vgg_16',
         'train_image_size': '224',
+        'batch_size': '64',
+    },
+    {
+        'model_name': 'inception_resnet_v2',
+        'train_image_size': '235',
         'batch_size': '64',
     },
 ]

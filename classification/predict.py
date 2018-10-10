@@ -18,7 +18,6 @@ import eval
 from pythonapi import common_tools
 from six.moves import cPickle
 
-
 def main(model_name, max_prediction):
     assert six.PY3
 
@@ -52,6 +51,7 @@ def main(model_name, max_prediction):
             predictions = []
             probabilities = []
             for i in range(n):
+                
                 pred = argsorts[lo][:max_prediction]
                 prob = probs[lo][pred].tolist()
                 pred = list(map(lambda i: cates[i]['text'], pred.tolist()))
@@ -63,6 +63,7 @@ def main(model_name, max_prediction):
                 'probabilities': probabilities,
             }))
             fout.write('\n')
+                
     assert lo == logits.shape[0]
 
 if __name__ == '__main__':
