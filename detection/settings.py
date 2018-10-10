@@ -7,8 +7,9 @@ TEST_IMAGE_DIR         = '../data/images/test'
 
 PRODUCTS_ROOT          = 'products'
 CATES                  = 'products/cates.json'
-NUM_CHAR_CATES         = 1000
+NUM_CHAR_CATES         = 3000
 MAX_DET_PER_IMAGE      = 1000
+DET_THRES              = 0.4
 
 DARKNET_ROOT           = 'darknet'
 DARKNET_BACKUP_DIR     = 'products/backup'

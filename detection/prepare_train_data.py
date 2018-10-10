@@ -55,9 +55,6 @@ def write_darknet_names():
 
 
 def crop_train_images():
-    imshape = (2048, 2048, 3)
-    cropshape = (settings.TRAIN_IMAGE_SIZE // 4, settings.TRAIN_IMAGE_SIZE // 4)
-    cropoverlap = (16, 16)
 
     with open(settings.CATES) as f:
         cates = json.load(f)
@@ -79,7 +76,9 @@ def crop_train_images():
         Acut = (cutto01(xmid + w / 2) - cutto01(xmid - w / 2)) * (cutto01(ymid + h / 2) - cutto01(ymid - h / 2))
         return Acut / (w * h)
 
-    def crop_once(line, write_images):
+    cropshape = (settings.TRAIN_IMAGE_SIZE // 4, settings.TRAIN_IMAGE_SIZE // 4)
+    cropoverlap = (16, 16)
+    def crop_once(line, trainName_list):
         anno = json.loads(line.strip())
         image_id = anno['image_id']
         all = []
@@ -90,13 +89,12 @@ def crop_train_images():
             if cate_id >= settings.NUM_CHAR_CATES:
                 cate_id = settings.NUM_CHAR_CATES
             all.append((char['adjusted_bbox'], cate_id))
-        if write_images:
-            image = cv2.imread(os.path.join(settings.TRAINVAL_IMAGE_DIR, anno['file_name']))
-            assert image.shape == imshape
-            for o in anno['ignore']:
-                poly = (np.array(o['polygon'])).astype(np.int32)
-                cv2.fillConvexPoly(image, poly, (128, 128, 128))
-        cropped_list = list()
+        image = cv2.imread(os.path.join(settings.TRAINVAL_IMAGE_DIR, anno['file_name']))
+        imshape = image.shape
+        for o in anno['ignore']:
+            poly = (np.array(o['polygon'])).astype(np.int32)
+            cv2.fillConvexPoly(image, poly, (128, 128, 128))
+        cropped_list = []
         for o in darknet_tools.get_crop_bboxes(imshape, cropshape, cropoverlap):
             xlo = o['xlo']
             xhi = xlo + cropshape[1]
@@ -114,13 +112,12 @@ def crop_train_images():
                 basename = '{}_{}'.format(image_id, o['name'])
                 cropped_file_name = os.path.join(settings.TRAINVAL_CROPPED_DIR, '{}.jpg'.format(basename))
                 cropped_list.append(cropped_file_name)
-                if write_images:
-                    cropped = image[ylo:yhi, xlo:xhi]
-                    cv2.imwrite(cropped_file_name, cropped)
-                    with open(os.path.join(settings.TRAINVAL_CROPPED_DIR, '{}.txt'.format(basename)), 'w') as f:
-                        for bbox, cate_id in labels:
-                            f.write('%d %f %f %f %f\n' % ((cate_id, ) + bbox))
-        return cropped_list
+                cropped = image[ylo:yhi, xlo:xhi]
+                cv2.imwrite(cropped_file_name, cropped)
+                with open(os.path.join(settings.TRAINVAL_CROPPED_DIR, '{}.txt'.format(basename)), 'w') as f:
+                    for bbox, cate_id in labels:
+                        f.write('%d %f %f %f %f\n' % ((cate_id, ) + bbox))
+        trainName_list += cropped_list
 
     q_i = queue.Queue()
     q_i.put(0)
@@ -131,14 +128,10 @@ def crop_train_images():
             print('crop trainval', i, '/', len(lines))
         q_i.put(i + 1)
         crop_once(*args)
-    common_tools.multithreaded(foo, [(line, True) for line in lines], num_thread=4)
-    trainset = []
-    for i, line in enumerate(lines):
-        if i % 1000 == 0:
-            print('list trainval', i, '/', len(lines))
-        trainset += crop_once(line, False)
+    trainName_list = []
+    common_tools.multithreaded(foo, [(line, trainName_list) for line in lines], num_thread=4)
     with open(settings.DARKNET_TRAIN_LIST, 'w') as f:
-        for file_name in trainset:
+        for file_name in trainName_list:
             f.write(file_name)
             f.write('\n')
 

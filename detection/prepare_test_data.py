@@ -10,6 +10,7 @@ import darknet_tools
 import json
 import os
 import settings
+import glob
 
 from jinja2 import Template
 from pythonapi import common_tools
@@ -30,7 +31,6 @@ def write_darknet_test_cfg():
 
 
 def crop_test_images(list_file_name):
-    imshape = (2048, 2048, 3)
 
     with open(settings.CATES) as f:
         cates = json.load(f)
@@ -39,15 +39,15 @@ def crop_test_images(list_file_name):
     if not os.path.isdir(settings.TEST_CROPPED_DIR):
         os.makedirs(settings.TEST_CROPPED_DIR)
 
-    with open(settings.DATA_LIST) as f:
-        data_list = json.load(f)
-    test_det = data_list['test_det']
-
-    def crop_once(anno, write_images):
-        image_id = anno['image_id']
-        if write_images:
-            image = cv2.imread(os.path.join(settings.TEST_IMAGE_DIR, anno['file_name']))
-            assert image.shape == imshape
+    imgPath_list = glob.glob(os.path.join(settings.TEST_IMAGE_DIR, '*.jpg'))
+    imgPath_list += glob.glob(os.path.join(settings.TEST_IMAGE_DIR, '*.png'))
+    testset_size = len(imgPath_list)
+    def crop_once(imgPath, testName_list):
+        image = cv2.imread(imgPath)
+        imshape = image.shape
+        fileName = os.path.basename(imgPath)
+        image_id = os.path.splitext(fileName)[0]
+        image_type = os.path.splitext(fileName)[1]
         cropped_list = []
         for level_id, (cropratio, cropoverlap) in enumerate(settings.TEST_CROP_LEVELS):
             cropshape = (int(round(settings.TEST_IMAGE_SIZE // cropratio)), int(round(settings.TEST_IMAGE_SIZE // cropratio)))
@@ -57,12 +57,11 @@ def crop_test_images(list_file_name):
                 ylo = o['ylo']
                 yhi = ylo + cropshape[0]
                 basename = '{}_{}_{}'.format(image_id, level_id, o['name'])
-                cropped_file_name = os.path.join(settings.TEST_CROPPED_DIR, '{}.jpg'.format(basename))
+                cropped_file_name = os.path.join(settings.TEST_CROPPED_DIR, basename + image_type)
                 cropped_list.append(cropped_file_name)
-                if write_images:
-                    cropped = image[ylo:yhi, xlo:xhi]
-                    cv2.imwrite(cropped_file_name, cropped)
-        return cropped_list
+                cropped = image[ylo:yhi, xlo:xhi]
+                cv2.imwrite(cropped_file_name, cropped)
+        testName_list += cropped_list
 
     q_i = queue.Queue()
     q_i.put(0)
@@ -70,17 +69,13 @@ def crop_test_images(list_file_name):
     def foo(*args):
         i = q_i.get()
         if i % 100 == 0:
-            print('crop test', i, '/', len(test_det))
-        q_i.put(i + 1)
+            print('crop test', i, '/', testset_size)
+        q_i.put(i+1)
         crop_once(*args)
-    common_tools.multithreaded(foo, [(anno, True) for anno in test_det], num_thread=4)
-    testset = []
-    for i, anno in enumerate(test_det):
-        if i % 1000 == 0:
-            print('list test', i, '/', len(test_det))
-        testset += crop_once(anno, False)
+    testName_list = []
+    common_tools.multithreaded(foo, [(imgPath, testName_list) for imgPath in imgPath_list], num_thread = 4)
     with open(list_file_name, 'w') as f:
-        for file_name in testset:
+        for file_name in testName_list:
             f.write(file_name)
             f.write('\n')
 
